@@ -2230,18 +2230,6 @@ BOOST_AUTO_TEST_CASE(literal_strings)
 	BOOST_CHECK(success(text));
 }
 
-BOOST_AUTO_TEST_CASE(invalid_integer_literal_fraction)
-{
-	char const* text = R"(
-		contract Foo {
-			function f() {
-				var x = 1.20;
-			}
-		}
-	)";
-	BOOST_CHECK(expectError(text) == Error::Type::TypeError);
-}
-
 BOOST_AUTO_TEST_CASE(invalid_integer_literal_exp)
 {
 	char const* text = R"(
@@ -3256,6 +3244,116 @@ BOOST_AUTO_TEST_CASE(library_functions_do_not_have_value)
 		}
 	)";
 	BOOST_CHECK(!success(text));
+}
+
+BOOST_AUTO_TEST_CASE(fixed_type_int_conversion)
+{
+	char const* text = R"(
+		contract test {
+			function f() {
+				uint128 a = 3;
+				int128 b = 4;
+				fixed c = b;
+				ufixed d = a;
+			}
+		}
+	)";
+	BOOST_CHECK(success(text));
+}
+
+BOOST_AUTO_TEST_CASE(fixed_type_const_int_conversion)
+{
+	char const* text = R"(
+		contract test {
+			function f() {
+				fixed c = 3;
+				ufixed d = 4;
+			}
+		}
+	)";
+	BOOST_CHECK(success(text));
+}
+
+BOOST_AUTO_TEST_CASE(fixed_type_literal)
+{
+	char const* text = R"(
+		contract test {
+			function f() {
+				fixed a = 3.14;
+				ufixed d = 2.555555;
+			}
+		}
+	)";
+	BOOST_CHECK(success(text));
+}
+
+BOOST_AUTO_TEST_CASE(fixed_type_literal_expression)
+{
+	char const* text = R"(
+		contract test {
+			function f() {
+				fixed a = 3.14 * 3;
+				ufixed b = 4 - 2.555555;
+				fixed c = 1.0 / 3.0;
+				ufixed d = 599 + .5367;
+				ufixed e = 35.245 % 12.9;
+				ufixed g = 1.2 % 2.00000;
+				//ufixed f = 2.222 ** 3.333;
+			}
+		}
+	)";
+	BOOST_CHECK(success(text));
+}
+
+BOOST_AUTO_TEST_CASE(fixed_type_literal_seconds_and_wei)
+{
+	char const* text = R"(
+		contract test {
+			function f() {
+				fixed a = 3.14 wei;
+				ufixed b = 4.5 seconds;
+			}
+		}
+	)";
+	BOOST_CHECK(success(text));
+}
+
+BOOST_AUTO_TEST_CASE(array_declaration_with_fixed_literal)
+{
+	char const* text = R"(
+		contract test {
+			function f() {
+				uint[3.56] a;
+			}
+		}
+	)";
+	BOOST_CHECK(!success(text));
+}
+
+BOOST_AUTO_TEST_CASE(inline_array_fixed_literals)
+{
+	char const* text = R"(
+		contract test {
+			function f() {
+				fixed[3] memory a = [3.5, 4.1234, 967.32]; 
+			}
+		}
+	)";
+	BOOST_CHECK(success(text));
+}
+
+BOOST_AUTO_TEST_CASE(size_capabilities_of_fixed_point_types)
+{
+	char const* text = R"(
+		contract test {
+			function f() {
+				fixed0x8 a = 0.12345678;
+				fixed8x0 b = 12345678.0;
+				fixed0x8 c = 0.00000009;
+			}
+		}
+	)";
+	BOOST_CHECK(success(text));
 }
 
 BOOST_AUTO_TEST_SUITE_END()

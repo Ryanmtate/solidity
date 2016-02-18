@@ -109,6 +109,7 @@ char const Token::m_tokenType[] =
 {
 	TOKEN_LIST(KT, KK)
 };
+
 int Token::parseSize(string::const_iterator _begin, string::const_iterator _end)
 {
 	try
@@ -121,6 +122,7 @@ int Token::parseSize(string::const_iterator _begin, string::const_iterator _end)
 		return -1;
 	}
 }
+
 tuple<Token::Value, unsigned int, unsigned int> Token::fromIdentifierOrKeyword(string const& _literal)
 {
 	auto positionM = find_if(_literal.begin(), _literal.end(), ::isdigit);

@@ -123,7 +123,7 @@ TypePointer Type::fromElementaryTypeName(ElementaryTypeNameToken const& _type)
 
 	Token::Value token = _type.token();
 	unsigned int m = _type.firstNumber();
-
+	unsigned int n = _type.secondNumber();
 	switch (token)
 	{
 	case Token::IntM:
@@ -132,10 +132,18 @@ TypePointer Type::fromElementaryTypeName(ElementaryTypeNameToken const& _type)
 		return make_shared<IntegerType>(m, IntegerType::Modifier::Unsigned);
 	case Token::BytesM:
 		return make_shared<FixedBytesType>(m);
+	case Token::FixedMxN:
+		return make_shared<FixedPointType>(m, n, FixedPointType::Modifier::Signed);
+	case Token::UFixedMxN:
+		return make_shared<FixedPointType>(m, n, FixedPointType::Modifier::Unsigned);
 	case Token::Int:
 		return make_shared<IntegerType>(256, IntegerType::Modifier::Signed);
 	case Token::UInt:
 		return make_shared<IntegerType>(256, IntegerType::Modifier::Unsigned);
+	case Token::Fixed:
+		return make_shared<FixedPointType>(128, 128, FixedPointType::Modifier::Signed);
+	case Token::UFixed:
+		return make_shared<FixedPointType>(128, 128, FixedPointType::Modifier::Unsigned);
 	case Token::Byte:
 		return make_shared<FixedBytesType>(1);
 	case Token::Address:
@@ -171,9 +179,10 @@ TypePointer Type::forLiteral(Literal const& _literal)
 	case Token::FalseLiteral:
 		return make_shared<BoolType>();
 	case Token::Number:
-		if (!IntegerConstantType::isValidLiteral(_literal))
-			return TypePointer();
-		return make_shared<IntegerConstantType>(_literal);
+		if (ConstantNumberType::isValidLiteral(_literal))
+			return make_shared<ConstantNumberType>(_literal);
+		else
+			return TypePointer();		
 	case Token::StringLiteral:
 		return make_shared<StringLiteralType>(_literal);
 	default:
@@ -251,17 +260,30 @@ IntegerType::IntegerType(int _bits, IntegerType::Modifier _modifier):
 
 bool IntegerType::isImplicitlyConvertibleTo(Type const& _convertTo) const
 {
-	if (_convertTo.category() != category())
-		return false;
-	IntegerType const& convertTo = dynamic_cast<IntegerType const&>(_convertTo);
-	if (convertTo.m_bits < m_bits)
-		return false;
-	if (isAddress())
-		return convertTo.isAddress();
-	else if (isSigned())
-		return convertTo.isSigned();
+	if (_convertTo.category() == category())
+	{	
+		IntegerType const& convertTo = dynamic_cast<IntegerType const&>(_convertTo);
+		if (convertTo.m_bits < m_bits)
+			return false;
+		if (isAddress())
+			return convertTo.isAddress();
+		else if (isSigned())
+			return convertTo.isSigned();
+		else
+			return !convertTo.isSigned() || convertTo.m_bits > m_bits;
+	}
+	else if (_convertTo.category() == Category::FixedPoint)
+	{
+		FixedPointType const& convertTo = dynamic_cast<FixedPointType const&>(_convertTo);
+		if (convertTo.integerBits() < m_bits)
+			return false;
+		else if (isSigned())
+			return convertTo.isSigned();
+		else
+			return !convertTo.isSigned() || convertTo.integerBits() > m_bits;
+	}
 	else
-		return !convertTo.isSigned() || convertTo.m_bits > m_bits;
+		return false;
 }
 
 bool IntegerType::isExplicitlyConvertibleTo(Type const& _convertTo) const
@@ -307,7 +329,7 @@ string IntegerType::toString(bool) const
 
 TypePointer IntegerType::binaryOperatorResult(Token::Value _operator, TypePointer const& _other) const
 {
-	if (_other->category() != Category::IntegerConstant && _other->category() != category())
+	if (_other->category() != Category::NumberConstant && _other->category() != category())
 		return TypePointer();
 	auto commonType = dynamic_pointer_cast<IntegerType const>(Type::commonType(shared_from_this(), _other));
 
@@ -340,11 +362,117 @@ MemberList::MemberMap IntegerType::nativeMembers(ContractDefinition const*) cons
 		return MemberList::MemberMap();
 }
 
-bool IntegerConstantType::isValidLiteral(const Literal& _literal)
+FixedPointType::FixedPointType(int _integerBits, int _fractionalBits, FixedPointType::Modifier _modifier):
+	m_integerBits(_integerBits), m_fractionalBits(_fractionalBits), m_modifier(_modifier)
+{
+	solAssert(
+		m_integerBits + m_fractionalBits > 0 && 
+		m_integerBits + m_fractionalBits <= 256 && 
+		m_integerBits % 8 == 0 && 
+		m_fractionalBits % 8 == 0,
+		"Invalid bit number(s) for fixed type: " + 
+		dev::toString(_integerBits) + "x" + dev::toString(_fractionalBits)
+	);
+}
+
+bool FixedPointType::isImplicitlyConvertibleTo(Type const& _convertTo) const
+{
+	if (_convertTo.category() == category())
+	{
+		FixedPointType const& convertTo = dynamic_cast<FixedPointType const&>(_convertTo);
+		if (convertTo.m_integerBits < m_integerBits || convertTo.m_fractionalBits < m_fractionalBits)
+			return false;
+		else if (isSigned())
+			return convertTo.isSigned();
+		else
+			return !convertTo.isSigned() || (convertTo.m_integerBits > m_integerBits && convertTo.m_fractionalBits > m_fractionalBits);
+	}
+	else if (_convertTo.category() == Category::Integer)
+	{
+		IntegerType const& convertTo = dynamic_cast<IntegerType const&>(_convertTo);
+		if (convertTo.numBits() < m_integerBits)
+			return false;
+		else if (isSigned())
+			return convertTo.isSigned();
+		else
+			return !convertTo.isSigned() || convertTo.numBits() > m_integerBits;
+	}
+	else
+		return false;
+}
+
+bool FixedPointType::isExplicitlyConvertibleTo(Type const& _convertTo) const
+{
+	return _convertTo.category() == category() ||
+		_convertTo.category() == Category::Integer ||
+		_convertTo.category() == Category::Enum ||
+		_convertTo.category() == Category::FixedBytes;
+}
+
+TypePointer FixedPointType::unaryOperatorResult(Token::Value _operator) const
+{
+	// "delete" is ok for all fixed types
+	if (_operator == Token::Delete)
+		return make_shared<TupleType>();
+	// for fixed, we allow +, -, ++ and --
+	else if (
+		_operator == Token::Add || 
+		_operator == Token::Sub ||
+		_operator == Token::Inc || 
+		_operator == Token::Dec ||
+		_operator == Token::After
+	)
+		return shared_from_this();
+	else
+		return TypePointer();
+}
+
+bool FixedPointType::operator==(Type const& _other) const
+{
+	if (_other.category() != category())
+		return false;
+	FixedPointType const& other = dynamic_cast<FixedPointType const&>(_other);
+	return other.m_integerBits == m_integerBits && other.m_fractionalBits == m_fractionalBits && other.m_modifier == m_modifier;
+}
+
+string FixedPointType::toString(bool) const
+{
+	string prefix = isSigned() ? "fixed" : "ufixed";
+	return prefix + dev::toString(m_integerBits) + "x" + dev::toString(m_fractionalBits);
+}
+
+TypePointer FixedPointType::binaryOperatorResult(Token::Value _operator, TypePointer const& _other) const
+{
+	if (_other->category() != Category::NumberConstant 
+		&& _other->category() != category()
+		&& _other->category() != Category::Integer
+	)
+		return TypePointer();
+	auto commonType = dynamic_pointer_cast<FixedPointType const>(Type::commonType(shared_from_this(), _other));
+
+	if (!commonType)
+		return TypePointer();
+
+	// All fixed types can be compared
+	if (Token::isCompareOp(_operator))
+		return commonType;
+	if (Token::isBooleanOp(_operator))
+		return TypePointer();
+	return commonType;
+}
+
+bool ConstantNumberType::isValidLiteral(const Literal& _literal)
 {
 	try
 	{
-		bigint x(_literal.value());
+		//all integers and numbers with one radix in them are considered valid literals
+		string literal = _literal.value();
+		//remove radix if it exists, else we cannot form a big int out of this
+		auto literalEnd = remove(literal.begin(), literal.end(), '.');
+		//problem here. If the first digit is a 0 in the string, it won't
+		//turn it into a integer...Using find if not, and using that as the beginning of the string.
+		auto literalBegin = find_if_not(literal.begin(), literalEnd, [](char const& a) { return a == '0'; });
+		bigint x(string(literalBegin, literalEnd));
 	}
 	catch (...)
 	{
@@ -353,16 +481,45 @@ bool IntegerConstantType::isValidLiteral(const Literal& _literal)
 	return true;
 }
 
-IntegerConstantType::IntegerConstantType(Literal const& _literal)
+ConstantNumberType::ConstantNumberType(Literal const& _literal)
 {
-	m_value = bigint(_literal.value());
-
+	string literal = _literal.value();
+	auto radix = find(literal.begin(), literal.end(), '.');
+	//we need to keep track of the radix's position and its distance from the end 
+	//of the literal. Without this, we cannot determine the scaling solution.
+	if (radix != literal.end())
+	{
+		auto literalEnd = remove(literal.begin(), literal.end(), '.');
+		auto literalBegin = find_if_not(literal.begin(), literalEnd, [](char const& a) { return a == '0'; });
+		m_scalingFactor = distance(radix, literalEnd);
+		m_value = bigint(string(literalBegin, literalEnd));
+	}
+	else	//no radix
+	{
+		m_scalingFactor = 0; //this will make it so that scaling equals 10^0 which equals 1
+		m_value = bigint(literal);
+	}
+	//going to include here something to ensure difference of scaling whenever
+	//there is a difference between a time unit and an otherwise literal
+	//not sure how to go about it for the overall system though....
 	switch (_literal.subDenomination())
 	{
-	case Literal::SubDenomination::Wei:
-	case Literal::SubDenomination::Second:
 	case Literal::SubDenomination::None:
 		break;
+	case Literal::SubDenomination::Wei:
+	case Literal::SubDenomination::Second:
+	{
+		if (m_scalingFactor != 0 || rightOfRadix() != bigint(0))
+		{
+			char const* sub = Token::toString(_literal.token());
+			BOOST_THROW_EXCEPTION(
+				Error(Error::Type::TypeError) << errinfo_comment(
+					"Cannot divide sub denomination " + ((sub) ? string(Token::toString(_literal.token())) : "") + " any further."
+				)
+			);
+		}	
+		break;
+	}
 	case Literal::SubDenomination::Szabo:
 		m_value *= bigint("1000000000000");
 		break;
@@ -390,43 +547,100 @@ IntegerConstantType::IntegerConstantType(Literal const& _literal)
 	}
 }
 
-bool IntegerConstantType::isImplicitlyConvertibleTo(Type const& _convertTo) const
+bool ConstantNumberType::isImplicitlyConvertibleTo(Type const& _convertTo) const
 {
-	if (auto targetType = dynamic_cast<IntegerType const*>(&_convertTo))
+	if (_convertTo.category() == Category::Integer)
 	{
+		auto targetType = dynamic_cast<IntegerType const*>(&_convertTo);
 		if (m_value == 0)
 			return true;
 		int forSignBit = (targetType->isSigned() ? 1 : 0);
-		if (m_value > 0)
+		if (m_scalingFactor == 0) //if current type is integer
 		{
-			if (m_value <= (u256(-1) >> (256 - targetType->numBits() + forSignBit)))
+			if (m_value > 0)
+			{
+				if (m_value <= (u256(-1) >> (256 - targetType->numBits() + forSignBit)))
+					return true;
+			}
+			else if (targetType->isSigned() && -m_value <= (u256(1) << (targetType->numBits() - forSignBit)))
 				return true;
+			return false;
 		}
-		else if (targetType->isSigned() && -m_value <= (u256(1) << (targetType->numBits() - forSignBit)))
+		else if (m_scalingFactor != 0) //if current type is fixed point
+		{
+			if (m_value > 0)
+			{
+				if (leftOfRadix() <= (u256(-1) >> (256 - targetType->numBits() + forSignBit)))
+					return true;
+			}
+			else if (targetType->isSigned() && -leftOfRadix() <= (u256(1) << (targetType->numBits() - forSignBit)))
+				return true;
+			return false;
+		}
+	}
+	else if (_convertTo.category() == Category::FixedPoint)
+	{
+		auto targetType = dynamic_cast<FixedPointType const*>(&_convertTo);
+		if (m_value == 0)
 			return true;
-		return false;
+		int forSignBit = (targetType->isSigned() ? 1 : 0);
+		if (m_scalingFactor == 0) //if the current type is an integer, focus on the integer bits
+		{
+			if (m_value > 0)
+			{
+				if (m_value <= (u256(-1) >> (256 - targetType->integerBits() + forSignBit)))
+					return true;
+			}
+			else if (targetType->isSigned() && -m_value <= (u256(1) << (targetType->integerBits() - forSignBit)))
+				return true;
+			return false;
+		}
+		else if (m_scalingFactor != 0)	//if the current type is fixed point, focus on both the
+		{						//integer bits and fractional bits and ensure they fit
+			if (m_value > 0)
+			{
+				if (
+					leftOfRadix() <= (u256(-1) >> (256 - targetType->integerBits() + forSignBit)) &&
+					rightOfRadix() <= (u256(-1) >> (256 - targetType->fractionalBits() + forSignBit))
+				)
+					return true;			
+			}
+			else if (
+				targetType->isSigned() &&
+				-leftOfRadix() <= (u256(1) >> (256 - targetType->integerBits() + forSignBit)) &&
+				-rightOfRadix() <= (u256(1) >> (256 - targetType->fractionalBits() + forSignBit))
+			)
+				return true;
+			return false;
+		}
 	}
 	else if (_convertTo.category() == Category::FixedBytes)
 	{
 		FixedBytesType const& fixedBytes = dynamic_cast<FixedBytesType const&>(_convertTo);
 		return fixedBytes.numBytes() * 8 >= integerType()->numBits();
 	}
-	else
-		return false;
+	return false;
 }
 
-bool IntegerConstantType::isExplicitlyConvertibleTo(Type const& _convertTo) const
+bool ConstantNumberType::isExplicitlyConvertibleTo(Type const& _convertTo) const
 {
-	TypePointer intType = integerType();
-	return intType && intType->isExplicitlyConvertibleTo(_convertTo);
+	if (m_scalingFactor == 0 || rightOfRadix() == 0)
+	{
+		TypePointer intType = integerType();
+		return intType && intType->isExplicitlyConvertibleTo(_convertTo);
+	}
+	TypePointer fixType = fixedPointType();
+	return fixType && fixType->isExplicitlyConvertibleTo(_convertTo);
 }
 
-TypePointer IntegerConstantType::unaryOperatorResult(Token::Value _operator) const
+TypePointer ConstantNumberType::unaryOperatorResult(Token::Value _operator) const
 {
 	bigint value;
 	switch (_operator)
 	{
 	case Token::BitNot:
+		if(rightOfRadix() != bigint(0))
+			BOOST_THROW_EXCEPTION(InternalCompilerError() << errinfo_comment("Cannot perform bit operations on non integer fixed type."));
 		value = ~m_value;
 		break;
 	case Token::Add:
@@ -440,10 +654,10 @@ TypePointer IntegerConstantType::unaryOperatorResult(Token::Value _operator) con
 	default:
 		return TypePointer();
 	}
-	return make_shared<IntegerConstantType>(value);
+	return make_shared<ConstantNumberType>(value, m_scalingFactor);
 }
 
-TypePointer IntegerConstantType::binaryOperatorResult(Token::Value _operator, TypePointer const& _other) const
+TypePointer ConstantNumberType::binaryOperatorResult(Token::Value _operator, TypePointer const& _other) const
 {
 	if (_other->category() == Category::Integer)
 	{
@@ -452,84 +666,160 @@ TypePointer IntegerConstantType::binaryOperatorResult(Token::Value _operator, Ty
 			return TypePointer();
 		return intType->binaryOperatorResult(_operator, _other);
 	}
+	else if (_other->category() == Category::FixedPoint)
+	{
+		shared_ptr<FixedPointType const> fixType = fixedPointType();
+		if (!fixType)
+			return TypePointer();
+		return fixType->binaryOperatorResult(_operator, _other);
+	}
 	else if (_other->category() != category())
 		return TypePointer();
 
-	IntegerConstantType const& other = dynamic_cast<IntegerConstantType const&>(*_other);
+	ConstantNumberType const& other = dynamic_cast<ConstantNumberType const&>(*_other);
 	if (Token::isCompareOp(_operator))
 	{
-		shared_ptr<IntegerType const> thisIntegerType = integerType();
-		shared_ptr<IntegerType const> otherIntegerType = other.integerType();
-		if (!thisIntegerType || !otherIntegerType)
-			return TypePointer();
-		return thisIntegerType->binaryOperatorResult(_operator, otherIntegerType);
+		if (m_scalingFactor == 0 || rightOfRadix() == 0)
+		{
+			shared_ptr<IntegerType const> thisIntegerType = integerType();
+			shared_ptr<IntegerType const> otherIntegerType = other.integerType();
+			if (!thisIntegerType || !otherIntegerType)
+				return TypePointer();
+			return thisIntegerType->binaryOperatorResult(_operator, otherIntegerType);
+		}
+		else
+		{
+			shared_ptr<FixedPointType const> thisFixedPointType = fixedPointType();
+			shared_ptr<FixedPointType const> otherFixedPointType = other.fixedPointType();
+			if (!thisFixedPointType || !otherFixedPointType)
+				return TypePointer();
+			return thisFixedPointType->binaryOperatorResult(_operator, otherFixedPointType);
+		}		
 	}
 	else
 	{
 		bigint value;
+		short scale = m_scalingFactor;
+		bool fixedPointOperation = (m_scalingFactor != 0 || other.m_scalingFactor != 0) && (rightOfRadix() != bigint(0) || other.rightOfRadix() != bigint(0));
 		switch (_operator)
 		{
+		//bit operations will only be enabled for integers and fixed types that resemble integers
 		case Token::BitOr:
+			if (fixedPointOperation)
+				BOOST_THROW_EXCEPTION(InternalCompilerError() << errinfo_comment("Cannot perform bit operations on non integer fixed type."));
 			value = m_value | other.m_value;
 			break;
 		case Token::BitXor:
+			if (fixedPointOperation)
+				BOOST_THROW_EXCEPTION(InternalCompilerError() << errinfo_comment("Cannot perform bit operations on non integer fixed type."));
 			value = m_value ^ other.m_value;
 			break;
 		case Token::BitAnd:
+			if (fixedPointOperation)
+				BOOST_THROW_EXCEPTION(InternalCompilerError() << errinfo_comment("Cannot perform bit operations on non integer fixed type."));
 			value = m_value & other.m_value;
 			break;
 		case Token::Add:
-			value = m_value + other.m_value;
+			value = leftOfRadix() + other.leftOfRadix();
+			value *= boost::multiprecision::pow(bigint(10), scale);
+			value += rightOfRadix() + other.rightOfRadix();;
 			break;
 		case Token::Sub:
-			value = m_value - other.m_value;
+			value = leftOfRadix() - other.leftOfRadix();
+			if (rightOfRadix() < other.rightOfRadix())
+				scale = other.m_scalingFactor;
+			value *= boost::multiprecision::pow(bigint(10), scale);
+			value += (rightOfRadix() - other.rightOfRadix());
 			break;
+		//these next 4 need to be scaled accordingly if it's a fixed type
 		case Token::Mul:
+			scale = m_scalingFactor - other.m_scalingFactor;
 			value = m_value * other.m_value;
-			break;
+			break;			
 		case Token::Div:
 			if (other.m_value == 0)
 				return TypePointer();
-			value = m_value / other.m_value;
+			else if (
+				(scale == 0 && other.m_scalingFactor == 0) || 
+				(rightOfRadix() == 0 && other.rightOfRadix() == 0)
+			) //if both are integers, we need to open it up a bit
+			{
+				//extend right side to atleast 8 bits or half the numerator, whichever is more
+				scale = extendedBits();
+				value = m_value;
+				value *= boost::multiprecision::pow(bigint(10), scale);
+				value /= other.m_value;
+			}
+			else
+			{
+				scale = m_scalingFactor + other.m_scalingFactor;
+				value = m_value / other.m_value;
+			}
 			break;
 		case Token::Mod:
+		{
 			if (other.m_value == 0)
 				return TypePointer();
-			value = m_value % other.m_value;
+			value = m_value;
+			bigint otherValue = other.m_value;
+			//need to make sure both variables are properly scaled.
+			scale = max(m_scalingFactor, other.m_scalingFactor);
+			value *= boost::multiprecision::pow(bigint(10), scale - m_scalingFactor);
+			otherValue *= boost::multiprecision::pow(bigint(10), scale - other.m_scalingFactor);
+
+			while (value >= otherValue)
+			{
+				auto scaledModulus = otherValue;
+				//for speed, we use the first loop to get a large number that 
+				//will take out a large chunk of value
+				while (scaledModulus * 10 < value) 
+					scaledModulus *= 10;
+				// second loop prevents recomputing scaledModulus where
+				// value > n * scaledModulus for some n < 10
+				while (value > scaledModulus)
+					value -= scaledModulus;
+			}
+
 			break;
+		}	
 		case Token::Exp:
 			if (other.m_value < 0)
 				return TypePointer();
 			else if (other.m_value > numeric_limits<unsigned int>::max())
 				return TypePointer();
 			else
-				value = boost::multiprecision::pow(m_value, other.m_value.convert_to<unsigned int>());
+				value = boost::multiprecision::pow(leftOfRadix(), other.leftOfRadix().convert_to<unsigned int>());
 			break;
 		default:
 			return TypePointer();
 		}
-		return make_shared<IntegerConstantType>(value);
+		return make_shared<ConstantNumberType>(value, scale);
 	}
 }
 
-bool IntegerConstantType::operator==(Type const& _other) const
+bool ConstantNumberType::operator==(Type const& _other) const
 {
 	if (_other.category() != category())
 		return false;
-	return m_value == dynamic_cast<IntegerConstantType const&>(_other).m_value;
+	ConstantNumberType const& other = dynamic_cast<ConstantNumberType const&>(_other);
+	return m_value == other.m_value && m_scalingFactor == other.m_scalingFactor;
 }
 
-string IntegerConstantType::toString(bool) const
+string ConstantNumberType::toString(bool) const
 {
-	return "int_const " + m_value.str();
+	if (m_scalingFactor == 0)
+		return "int_const " + m_value.str();
+	string valueString = m_value.str();
+	size_t index = valueString.length() - m_scalingFactor;
+	return "fixed_const " + valueString.insert(index, ".");
 }
 
-u256 IntegerConstantType::literalValue(Literal const*) const
+u256 ConstantNumberType::literalValue(Literal const*) const
 {
 	u256 value;
 	// we ignore the literal and hope that the type was correctly determined
-	solAssert(m_value <= u256(-1), "Integer constant too large.");
-	solAssert(m_value >= -(bigint(1) << 255), "Integer constant too small.");
+	solAssert(m_value <= u256(-1), "Number constant too large.");
+	solAssert(m_value >= -(bigint(1) << 255), "Number constant too small.");
 
 	if (m_value >= 0)
 		value = u256(m_value);
@@ -539,16 +829,22 @@ u256 IntegerConstantType::literalValue(Literal const*) const
 	return value;
 }
 
-TypePointer IntegerConstantType::mobileType() const
+TypePointer ConstantNumberType::mobileType() const
 {
-	auto intType = integerType();
-	solAssert(!!intType, "mobileType called with invalid integer constant " + toString(false));
-	return intType;
+	if (m_scalingFactor == 0 || rightOfRadix() == 0)
+	{
+		auto intType = integerType();
+		solAssert(!!intType, "mobileType called with invalid integer constant " + toString(false));
+		return intType;
+	}
+	auto fixType = fixedPointType();
+	solAssert(!!fixType, "mobileType called with invalid fixed constant " + toString(false));
+	return fixType;
 }
 
-shared_ptr<IntegerType const> IntegerConstantType::integerType() const
+shared_ptr<IntegerType const> ConstantNumberType::integerType() const
 {
-	bigint value = m_value;
+	bigint value = leftOfRadix();
 	bool negative = (value < 0);
 	if (negative) // convert to positive number of same bit requirements
 		value = ((-value) - 1) << 1;
@@ -560,6 +856,26 @@ shared_ptr<IntegerType const> IntegerConstantType::integerType() const
 			negative ? IntegerType::Modifier::Signed : IntegerType::Modifier::Unsigned
 		);
 }
+
+shared_ptr<FixedPointType const> ConstantNumberType::fixedPointType() const
+{
+	bigint value = leftOfRadix();
+	bool negative = (value < 0);
+	if (negative) // convert to positive number of same bit requirements
+		value = ((-value) - 1) << 1;
+	if (value > u256(-1))
+		return shared_ptr<FixedPointType const>();
+	else
+	{
+		// need to fix this because these aren't the proper M and N
+		return make_shared<FixedPointType>(
+			max(bytesRequired(value), 1u) * 8, m_scalingFactor,
+			negative ? FixedPointType::Modifier::Signed : FixedPointType::Modifier::Unsigned
+		);
+	}
+}
+
+
 
 StringLiteralType::StringLiteralType(Literal const& _literal):
 	m_value(_literal.value())

@@ -132,7 +132,7 @@ class Type: private boost::noncopyable, public std::enable_shared_from_this<Type
 public:
 	enum class Category
 	{
-		Integer, IntegerConstant, StringLiteral, Bool, Real, Array,
+		Integer, NumberConstant, StringLiteral, Bool, FixedPoint, Array,
 		FixedBytes, Contract, Struct, Function, Enum, Tuple,
 		Mapping, TypeType, Modifier, Magic, Module
 	};
@@ -201,7 +201,7 @@ public:
 	virtual bool isValueType() const { return false; }
 	virtual unsigned sizeOnStack() const { return 1; }
 	/// @returns the mobile (in contrast to static) type corresponding to the given type.
-	/// This returns the corresponding integer type for IntegerConstantTypes and the pointer type
+	/// This returns the corresponding integer type for ConstantTypes and the pointer type
 	/// for storage reference types.
 	virtual TypePointer mobileType() const { return shared_from_this(); }
 	/// @returns true if this is a non-value type and the data of this type is stored at the
@@ -308,20 +308,64 @@ private:
 };
 
 /**
- * Integer constants either literals or computed. Example expressions: 2, 2+10, ~10.
- * There is one distinct type per value.
+ * A fixed point type number (signed, unsigned).
  */
-class IntegerConstantType: public Type
+class FixedPointType: public Type
 {
 public:
-	virtual Category category() const override { return Category::IntegerConstant; }
+	enum class Modifier
+	{
+		Unsigned, Signed
+	};
+	virtual Category category() const override { return Category::FixedPoint; }
+
+	explicit FixedPointType(int _integerBits, int _fractionalBits, Modifier _modifier = Modifier::Unsigned);
+
+	virtual bool isImplicitlyConvertibleTo(Type const& _convertTo) const override;
+	virtual bool isExplicitlyConvertibleTo(Type const& _convertTo) const override;
+	virtual TypePointer unaryOperatorResult(Token::Value _operator) const override;
+	virtual TypePointer binaryOperatorResult(Token::Value _operator, TypePointer const& _other) const override;
+
+	virtual bool operator==(Type const& _other) const override;
+
+	virtual unsigned calldataEncodedSize(bool _padded = true) const override { return _padded ? 32 : (m_integerBits + m_fractionalBits) / 8; }
+	virtual unsigned storageBytes() const override { return (m_integerBits + m_fractionalBits) / 8; }
+	virtual bool isValueType() const override { return true; }
+
+	virtual std::string toString(bool _short) const override;
+
+	virtual TypePointer encodingType() const override { return shared_from_this(); }
+	virtual TypePointer interfaceType(bool) const override { return shared_from_this(); }
+
+	int numBits() const { return m_integerBits + m_fractionalBits; }
+	int integerBits() const { return m_integerBits; }
+	int fractionalBits() const { return m_fractionalBits; }
+	bool isSigned() const { return m_modifier == Modifier::Signed; }
+
+private:
+	int m_integerBits;
+	int m_fractionalBits;
+	Modifier m_modifier;
+};
+
+/**
+ * Integer and fixed precision constants either literals or computed. 
+ * Example expressions: 2, 3.14, 2+10.2, ~10.
+ * There is one distinct type per value.
+ */
+class ConstantNumberType: public Type
+{
+public:
+
+	virtual Category category() const override { return Category::NumberConstant; }
 
 	/// @returns true if the literal is a valid integer.
 	static bool isValidLiteral(Literal const& _literal);
 
-	explicit IntegerConstantType(Literal const& _literal);
-	explicit IntegerConstantType(bigint _value): m_value(_value) {}
-
+	explicit ConstantNumberType(Literal const& _literal);
+	explicit ConstantNumberType(bigint _value, short _scalingFactor): 
+		m_value(_value), m_scalingFactor(_scalingFactor)
+	{}
 	virtual bool isImplicitlyConvertibleTo(Type const& _convertTo) const override;
 	virtual bool isExplicitlyConvertibleTo(Type const& _convertTo) const override;
 	virtual TypePointer unaryOperatorResult(Token::Value _operator) const override;
@@ -338,9 +382,40 @@ public:
 
 	/// @returns the smallest integer type that can hold the value or an empty pointer if not possible.
 	std::shared_ptr<IntegerType const> integerType() const;
+	/// @returns the smallest fixed type that can hold the value or an empty pointer
+	std::shared_ptr<FixedPointType const> fixedPointType() const;
+	
+	short scalingFactor() const { return m_scalingFactor; }
+
+	bigint leftOfRadix() const
+	{
+		return m_value / boost::multiprecision::pow(m_scaleType, m_scalingFactor);
+	}
+	bigint rightOfRadix() const
+	{
+		return m_value % boost::multiprecision::pow(m_scaleType, m_scalingFactor);
+	}
+	/// @returns a number to scale to for the purpose of integers that do not inherently
+	/// have the necessary scaling factor to produce an accurate number.
+	short extendedBits() const
+	{
+		bigint numerator = leftOfRadix();
+		short denominatorBits = 0;
+		do
+		{
+			numerator /= 10;
+			denominatorBits++;
+		} while (numerator != 0);
+		return denominatorBits/2 >= 8 ? denominatorBits/2 : 8;
+	}
 
 private:
 	bigint m_value;
+	/// @returns the scaling factor of the current number, 
+	/// this being the point where the radix will rest at m_value*10^scalingFactor
+	short m_scalingFactor;
+	u256 m_scaleType = 10;
+
 };
 
 /**
