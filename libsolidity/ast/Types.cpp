@@ -783,7 +783,7 @@ TypePointer ConstantNumberType::binaryOperatorResult(Token::Value _operator, Typ
 			break;
 		}	
 		case Token::Exp:
-			if (other.m_value < 0)
+			if (other.m_value < 0)	//this needs to change now that we have fixed points
 				return TypePointer();
 			else if (other.m_value > numeric_limits<unsigned int>::max())
 				return TypePointer();
