@@ -1331,15 +1331,6 @@ BOOST_AUTO_TEST_CASE(overflow_caused_by_ether_units)
 	BOOST_CHECK(expectError(sourceCode) == Error::Type::TypeError);
 }
 
-BOOST_AUTO_TEST_CASE(exp_operator_negative_exponent)
-{
-	char const* sourceCode = R"(
-		contract test {
-			function f() returns(uint d) { return 2 ** -3; }
-		})";
-	BOOST_CHECK(expectError(sourceCode) == Error::Type::TypeError);
-}
-
 BOOST_AUTO_TEST_CASE(exp_operator_exponent_too_big)
 {
 	char const* sourceCode = R"(
@@ -3297,8 +3288,9 @@ BOOST_AUTO_TEST_CASE(fixed_type_literal_expression)
 				fixed c = 1.0 / 3.0;
 				ufixed d = 599 + .5367;
 				ufixed e = 35.245 % 12.9;
-				ufixed g = 1.2 % 2.00000;
-				//ufixed f = 2.222 ** 3.333;
+				ufixed f = 1.2 % 2.00000;
+				//fixed g = 2 ** -1.5;
+				//fixed h = -3 ** -5.8;
 			}
 		}
 	)";
@@ -3330,6 +3322,19 @@ BOOST_AUTO_TEST_CASE(array_declaration_with_fixed_literal)
 	BOOST_CHECK(!success(text));
 }
 
+BOOST_AUTO_TEST_CASE(mapping_with_fixed_literal)
+{
+	char const* text = R"(
+		contract test {
+			mapping(fixed => string) fixedString;
+			function f() {
+				fixedString[3.14] = "Pi";
+			}
+		}
+	)";
+	BOOST_CHECK(success(text));
+}
+
 BOOST_AUTO_TEST_CASE(inline_array_fixed_literals)
 {
 	char const* text = R"(
@@ -3350,6 +3355,20 @@ BOOST_AUTO_TEST_CASE(size_capabilities_of_fixed_point_types)
 				fixed0x8 a = 0.12345678;
 				fixed8x0 b = 12345678.0;
 				fixed0x8 c = 0.00000009;
+			}
+		}
+	)";
+	BOOST_CHECK(success(text));
+}
+
+BOOST_AUTO_TEST_CASE(var_capable_of_holding_fixed_constants)
+{
+	char const* text = R"(
+		contract test {
+			function f() {
+				var a = 0.12345678;
+				var b = 12345678.0;
+				var c = 0.00000009;
 			}
 		}
 	)";

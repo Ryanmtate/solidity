@@ -26,6 +26,7 @@
 #include <string>
 #include <map>
 #include <boost/noncopyable.hpp>
+#include <boost/rational.hpp>
 #include <libdevcore/Common.h>
 #include <libsolidity/interface/Exceptions.h>
 #include <libsolidity/ast/ASTForward.h>
@@ -42,6 +43,7 @@ class FunctionType; // forward
 using TypePointer = std::shared_ptr<Type const>;
 using FunctionTypePointer = std::shared_ptr<FunctionType const>;
 using TypePointers = std::vector<TypePointer>;
+using rational = boost::rational<bigint>;
 
 
 enum class DataLocation { Storage, CallData, Memory };
@@ -349,7 +351,7 @@ private:
 };
 
 /**
- * Integer and fixed precision constants either literals or computed. 
+ * Integer and fixed point constants either literals or computed. 
  * Example expressions: 2, 3.14, 2+10.2, ~10.
  * There is one distinct type per value.
  */
@@ -363,7 +365,7 @@ public:
 	static bool isValidLiteral(Literal const& _literal);
 
 	explicit ConstantNumberType(Literal const& _literal);
-	explicit ConstantNumberType(bigint _value, short _scalingFactor): 
+	explicit ConstantNumberType(rational _value, short _scalingFactor):
 		m_value(_value), m_scalingFactor(_scalingFactor)
 	{}
 	virtual bool isImplicitlyConvertibleTo(Type const& _convertTo) const override;
@@ -384,38 +386,11 @@ public:
 	std::shared_ptr<IntegerType const> integerType() const;
 	/// @returns the smallest fixed type that can hold the value or an empty pointer
 	std::shared_ptr<FixedPointType const> fixedPointType() const;
+	bigint denominator() const { return m_value.denominator(); }
 	
-	short scalingFactor() const { return m_scalingFactor; }
-
-	bigint leftOfRadix() const
-	{
-		return m_value / boost::multiprecision::pow(m_scaleType, m_scalingFactor);
-	}
-	bigint rightOfRadix() const
-	{
-		return m_value % boost::multiprecision::pow(m_scaleType, m_scalingFactor);
-	}
-	/// @returns a number to scale to for the purpose of integers that do not inherently
-	/// have the necessary scaling factor to produce an accurate number.
-	short extendedBits() const
-	{
-		bigint numerator = leftOfRadix();
-		short denominatorBits = 0;
-		do
-		{
-			numerator /= 10;
-			denominatorBits++;
-		} while (numerator != 0);
-		return denominatorBits/2 >= 8 ? denominatorBits/2 : 8;
-	}
-
 private:
-	bigint m_value;
-	/// @returns the scaling factor of the current number, 
-	/// this being the point where the radix will rest at m_value*10^scalingFactor
+	rational m_value;
 	short m_scalingFactor;
-	u256 m_scaleType = 10;
-
 };
 
 /**

@@ -1284,9 +1284,17 @@ bool TypeChecker::visit(IndexAccess const& _access)
 		else
 		{
 			expectType(*index, IntegerType(256));
-			if (auto integerType = dynamic_cast<ConstantNumberType const*>(type(*index).get()))
-				if (!actualType.isDynamicallySized() && actualType.length() <= integerType->literalValue(nullptr))
+			if (auto numberType = dynamic_cast<ConstantNumberType const*>(type(*index).get()))
+			{
+				cout << numberType->denominator().str() << endl;
+				if (numberType->denominator() != 1)
+				{
+					cout << numberType->denominator().str() << endl;
+					typeError(_access.location(), "Invalid type for array access.");
+				}
+				if (!actualType.isDynamicallySized() && actualType.length() <= numberType->literalValue(nullptr))
 					typeError(_access.location(), "Out of bounds array access.");
+			}				
 		}
 		resultType = actualType.baseType();
 		isLValue = actualType.location() != DataLocation::CallData;
