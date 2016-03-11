@@ -125,6 +125,7 @@ TypePointer Type::fromElementaryTypeName(ElementaryTypeNameToken const& _type)
 	Token::Value token = _type.token();
 	unsigned int m = _type.firstNumber();
 	unsigned int n = _type.secondNumber();
+
 	switch (token)
 	{
 	case Token::IntM:
@@ -468,14 +469,27 @@ bool ConstantNumberType::isValidLiteral(const Literal& _literal)
 	{
 		rational numerator;
 		rational denominator = bigint(1);
-		auto radixPoint = find(_literal.value().begin(), _literal.value().end(), '.');
+		auto radixPoint = find(_literal.value().begin(), _literal.value().end(), '.');		
 		if (radixPoint != _literal.value().end())
 		{
-			string fractionals = string(radixPoint + 1, _literal.value().end());
+			//problem here. If the first digit is a 0 in the string, it won't
+			//turn it into a integer...Using find if not to count the leading 0s.
+			auto leadingZeroes = find_if_not(
+				radixPoint + 1, 
+				_literal.value().end(), 
+				[](char const& a) { return a == '0'; }
+			);
+			auto fractionalBegin = leadingZeroes != _literal.value().end() ?
+				leadingZeroes : radixPoint + 1;
+
+			string fractionals = string(fractionalBegin, _literal.value().end());
 			denominator = bigint(fractionals);
-			denominator /= boost::multiprecision::pow(bigint(10), fractionals.length());
+			denominator /= boost::multiprecision::pow(
+				bigint(10), 
+				distance(radixPoint + 1, _literal.value().end())
+			);
 			numerator = bigint(string(_literal.value().begin(), radixPoint));
-			rational x = numerator + denominator;	
+			rational x = numerator + denominator;
 		}
 		else
 		{
@@ -498,9 +512,16 @@ ConstantNumberType::ConstantNumberType(Literal const& _literal)
 	auto radixPoint = find(_literal.value().begin(), _literal.value().end(), '.');
 	if (radixPoint != _literal.value().end())
 	{
+		auto leadingZeroes = find_if_not(
+				radixPoint + 1, 
+				_literal.value().end(), 
+				[](char const& a) { return a == '0'; }
+			);
+		auto fractionalBegin = leadingZeroes != _literal.value().end() ?
+			leadingZeroes : radixPoint + 1;
 		//separatly grabbing the numerator, denominator, and the scaling factor for conversions
-		string fractionals = string(radixPoint + 1, _literal.value().end());
-		m_scalingFactor = fractionals.length();
+		string fractionals = string(fractionalBegin, _literal.value().end());
+		m_scalingFactor = distance(radixPoint + 1, _literal.value().end());
 		denominator = bigint(fractionals);
 		denominator /= boost::multiprecision::pow(bigint(10), m_scalingFactor);
 		numerator = bigint(string(_literal.value().begin(), radixPoint));
