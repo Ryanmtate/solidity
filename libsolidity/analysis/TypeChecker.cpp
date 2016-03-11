@@ -1286,10 +1286,10 @@ bool TypeChecker::visit(IndexAccess const& _access)
 			expectType(*index, IntegerType(256));
 			if (auto numberType = dynamic_cast<ConstantNumberType const*>(type(*index).get()))
 			{
-				cout << numberType->denominator().str() << endl;
+				//cout << numberType->denominator().str() << endl;
 				if (numberType->denominator() != 1)
 				{
-					cout << numberType->denominator().str() << endl;
+					//cout << numberType->denominator().str() << endl;
 					typeError(_access.location(), "Invalid type for array access.");
 				}
 				if (!actualType.isDynamicallySized() && actualType.length() <= numberType->literalValue(nullptr))

@@ -506,10 +506,10 @@ ConstantNumberType::ConstantNumberType(Literal const& _literal)
 		numerator = bigint(string(_literal.value().begin(), radixPoint));
 
 		m_value = numerator + denominator;		
-		cout << "Original form: " << _literal.value() << endl;
-		cout << "Actual form: " << to_string(m_value) << endl;
-		cout << "Float form: " << to_string(boost::rational_cast<long double>(m_value)) << endl;
-		cout << endl;
+		//cout << "Original form: " << _literal.value() << endl;
+		//cout << "Actual form: " << to_string(m_value) << endl;
+		//cout << "Float form: " << to_string(boost::rational_cast<long double>(m_value)) << endl;
+		//cout << endl;
 	}
 	else
 	{
@@ -734,7 +734,7 @@ TypePointer ConstantNumberType::binaryOperatorResult(Token::Value _operator, Typ
 				//cout << gcd(value, other.m_value) << endl;
 				bigint integers = m_value.numerator() / m_value.denominator();
 				value -= integers;
-				cout << "MODULO: " << to_string(value) << endl;
+				//cout << "MODULO: " << to_string(value) << endl;
 			}
 			else
 				value = m_value.numerator() % other.m_value.numerator();
@@ -765,7 +765,7 @@ TypePointer ConstantNumberType::binaryOperatorResult(Token::Value _operator, Typ
 				return TypePointer(); //this needs redoing now
 			else
 				value = boost::multiprecision::pow(m_value.numerator(), other.m_value.numerator().convert_to<unsigned int>());
-			cout << "EXPONENT: " << to_string(value) << endl;
+			//cout << "EXPONENT: " << to_string(value) << endl;
 			break;
 		}
 		default:
