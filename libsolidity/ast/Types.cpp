@@ -747,41 +747,34 @@ TypePointer ConstantNumberType::binaryOperatorResult(Token::Value _operator, Typ
 			else if (fixedPointType)
 			{
 				value = m_value;
-				//cout << gcd(value, other.m_value) << endl;
 				bigint integers = m_value.numerator() / m_value.denominator();
 				value -= integers;
-				//cout << "MODULO: " << to_string(value) << endl;
 			}
 			else
 				value = m_value.numerator() % other.m_value.numerator();
 			break;	
 		case Token::Exp:
 		{
-			/*bigint m_ints = m_value.numerator() / m_value.denominator();
-			bigint other_ints = other.m_value.numerator() / other.m_value.denominator();
-			rational m_fractions = abs(m_value - m_ints);
-			rational other_fractions = abs(other.m_value - other_ints);
-			bigint newNumerator;
 			bigint newDenominator;
-			double rootHolder;
-
-			cout << "Numerator(s): " << m_ints.str() << ", " << other_ints.str() << endl;
-			cout << "Fracs: " << m_fractions << ", " << other_fractions << endl;
-			cout << "Main number: " << to_string(m_value) << endl;
-			cout << "Exponential value: " << to_string(other.m_value) << endl;
-			
-			newNumerator += boost::multiprecision::pow(m_ints, other_ints.convert_to<unsigned int>());
-			newNumerator += boost::multiprecision::pow(m_fractions.numerator(), other_ints.convert_to<unsigned int>());
-			newDenominator += boost::multiprecision::pow(m_fractions.denominator(), other_ints.convert_to<unsigned int>());
-			cout << newNumerator.str() << "/" << newDenominator.str() << endl;
-			*/
-			if (other.m_value < 0) //apply inverse
+			bigint newNumerator;
+			if (other.m_value.denominator() != 1) 
 				return TypePointer();
-			else if (other.m_value > numeric_limits<unsigned int>::max())
-				return TypePointer(); //this needs redoing now
+			else if (abs(other.m_value) > numeric_limits<unsigned int>::max())
+				return TypePointer();
+			else if (other.m_value < 0) //apply inverse
+			{
+				rational absoluteValue = abs(other.m_value);
+				newDenominator = boost::multiprecision::pow(m_value.numerator(), absoluteValue.numerator().convert_to<unsigned int>());
+				newNumerator = boost::multiprecision::pow(m_value.denominator(), absoluteValue.numerator().convert_to<unsigned int>());
+				value = rational(newNumerator, newDenominator);
+			}
 			else
-				value = boost::multiprecision::pow(m_value.numerator(), other.m_value.numerator().convert_to<unsigned int>());
-			//cout << "EXPONENT: " << to_string(value) << endl;
+			{
+				newNumerator = boost::multiprecision::pow(m_value.numerator(), other.m_value.numerator().convert_to<unsigned int>());
+				newDenominator = boost::multiprecision::pow(m_value.denominator(), other.m_value.numerator().convert_to<unsigned int>());
+				value = rational(newNumerator, newDenominator);
+			}
+			cout << "EXPONENT: " << to_string(value) << endl;
 			break;
 		}
 		default:

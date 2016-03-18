@@ -3245,7 +3245,7 @@ BOOST_AUTO_TEST_CASE(valid_fraction_fixed_type)
 		contract test {
 			function f(){
 				fixed8x8 a = (2**24)/127;
-				fixed0x8 b = (1/256);
+				fixed0x8 b = 1/256;
 			}
 		}
 	)";
@@ -3274,7 +3274,7 @@ BOOST_AUTO_TEST_CASE(valid_fixed_types)
 			function f(){
 				fixed8x8 a = 87654321.12345678;
 				fixed16x16 b = a**2;
-				fixed24x24 c = b**(1.5);
+				fixed24x24 c = b**1.5;
 				fixed32x32 d = b**2;
 				fixed40x40 e = a**5;
 			}
@@ -3336,8 +3336,7 @@ BOOST_AUTO_TEST_CASE(fixed_type_literal_expression)
 				ufixed d = 599 + .5367;
 				ufixed e = 35.245 % 12.9;
 				ufixed f = 1.2 % 2.00000;
-				//fixed g = 2 ** -1.5;
-				//fixed h = -3 ** -5.8;
+				fixed g = 2 ** -2;
 			}
 		}
 	)";
