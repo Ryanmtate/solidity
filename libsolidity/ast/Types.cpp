@@ -832,7 +832,7 @@ shared_ptr<IntegerType const> ConstantNumberType::integerType() const
 	bigint value = m_value.numerator();
 	bool negative = (value < 0);
 	if (negative) // convert to positive number of same bit requirements
-		value = ((-value) - 1) << 1;
+		value = ((0 - value) - 1) << 1;
 	if (value > u256(-1))
 		return shared_ptr<IntegerType const>();
 	else
@@ -844,18 +844,19 @@ shared_ptr<IntegerType const> ConstantNumberType::integerType() const
 
 shared_ptr<FixedPointType const> ConstantNumberType::fixedPointType() const
 {
-	bigint numerator = m_value.numerator();
-	bigint denominator = m_value.denominator();
-	bool negative = (m_value < 0);
-	if (negative) // convert to positive number of same bit requirements
-		numerator = ((-numerator) - 1) << 1;
-	if (numerator > u256(-1))
+	rational value = m_value;
+	bool negative = (value < 0);
+	if (negative) // convert to absolute value
+		value = abs(value);
+	if (value > u256(-1))
 		return shared_ptr<FixedPointType const>();
 	else
 	{
+		cout << "numerator: " << max(bytesRequired(value.numerator()), 1u) * 8 << endl;
+		cout << "denominator: " << max(bytesRequired(value.denominator()), 1u) * 8 << endl;
 		// need to fix this because these aren't the proper M and N
 		return make_shared<FixedPointType>(
-			max(bytesRequired(numerator), 1u) * 8, max(bytesRequired(denominator), 1u) * 8,
+			max(bytesRequired(value.numerator()), 1u) * 8, max(bytesRequired(value.denominator()), 1u) * 8,
 			negative ? FixedPointType::Modifier::Signed : FixedPointType::Modifier::Unsigned
 		);
 	}
