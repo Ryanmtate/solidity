@@ -3274,7 +3274,7 @@ BOOST_AUTO_TEST_CASE(valid_fixed_types)
 			function f(){
 				fixed8x8 a = 87654321.12345678;
 				fixed16x16 b = a**2;
-				fixed24x24 c = b**1.5;
+				fixed24x24 c = b**3;
 				fixed32x32 d = b**2;
 				fixed40x40 e = a**5;
 			}
@@ -3443,7 +3443,7 @@ BOOST_AUTO_TEST_CASE(size_capabilities_of_fixed_point_types)
 	BOOST_CHECK(success(text));
 }
 
-BOOST_AUTO_TEST_CASE(var_capable_of_holding_fixed_constants)
+BOOST_AUTO_TEST_CASE(var_capable_of_holding_constant_rationals)
 {
 	char const* text = R"(
 		contract test {
@@ -3451,6 +3451,36 @@ BOOST_AUTO_TEST_CASE(var_capable_of_holding_fixed_constants)
 				var a = 0.12345678;
 				var b = 12345678.0;
 				var c = 0.00000009;
+			}
+		}
+	)";
+	BOOST_CHECK(success(text));
+}
+
+BOOST_AUTO_TEST_CASE(invalid_rational_exponent_usage)
+{
+	char const* text = R"(
+		contract test {
+			function f() {
+				fixed a = 3 ** 1.5;
+				fixed b = 2 ** (1/2);
+				fixed c = 42 ** (-1/4);
+				fixed d = 16 ** -0.33;
+			}
+		}
+	)";
+	BOOST_CHECK(!success(text));
+}
+
+BOOST_AUTO_TEST_CASE(fixed_point_casting_exponents)
+{
+	char const* text = R"(
+		contract test {
+			function f() {
+				fixed a = 3 ** fixed(1.5);
+				fixed b = 2 ** fixed(1/2);
+				fixed c = 42 ** fixed(-1/4);
+				fixed d = 16 ** fixed(-0.33);
 			}
 		}
 	)";
