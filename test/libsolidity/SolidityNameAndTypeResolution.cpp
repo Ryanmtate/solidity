@@ -3462,10 +3462,10 @@ BOOST_AUTO_TEST_CASE(invalid_rational_exponent_usage)
 	char const* text = R"(
 		contract test {
 			function f() {
-				fixed a = 3 ** 1.5;
-				fixed b = 2 ** (1/2);
-				fixed c = 42 ** (-1/4);
-				fixed d = 16 ** -0.33;
+				fixed8x8 a = 3 ** 1.5;
+				fixed24x24 b = 2 ** (1/2);
+				fixed40x40 c = 42 ** (-1/4);
+				fixed48x48 d = 16 ** -0.33;
 			}
 		}
 	)";
