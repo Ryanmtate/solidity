@@ -1178,6 +1178,40 @@ BOOST_AUTO_TEST_CASE(conditional_with_assignment)
 	BOOST_CHECK(successParse(text));
 }
 
+BOOST_AUTO_TEST_CASE(declaring_fixed_and_ufixed_variables)
+{
+	char const* text = R"(
+		contract A {
+			fixed40x40 storeMe;
+			function f(ufixed x, fixed32x32 y) {
+				ufixed8x8 a;
+				fixed b;
+			}
+		}
+	)";
+	BOOST_CHECK(successParse(text));
+}
+
+BOOST_AUTO_TEST_CASE(declaring_fixed_literal_variables)
+{
+	char const* text = R"(
+		contract A {
+			fixed40x40 pi = 3.14;
+		}
+	)";
+	BOOST_CHECK(successParse(text));
+}
+
+BOOST_AUTO_TEST_CASE(no_double_radix_in_fixed_literal)
+{
+	char const* text = R"(
+		contract A {
+			fixed40x40 pi = 3.14.15;
+		}
+	)";
+	BOOST_CHECK(!successParse(text));
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 
 }

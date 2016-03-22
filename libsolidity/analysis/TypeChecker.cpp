@@ -716,8 +716,8 @@ bool TypeChecker::visit(VariableDeclarationStatement const& _statement)
 			// Infer type from value.
 			solAssert(!var.typeName(), "");
 			if (
-				valueComponentType->category() == Type::Category::IntegerConstant &&
-				!dynamic_pointer_cast<IntegerConstantType const>(valueComponentType)->integerType()
+				valueComponentType->category() == Type::Category::NumberConstant &&
+				!dynamic_pointer_cast<ConstantNumberType const>(valueComponentType)->integerType()
 			)
 				fatalTypeError(_statement.initialValue()->location(), "Invalid integer constant " + valueComponentType->toString() + ".");
 			var.annotation().type = valueComponentType->mobileType();
@@ -742,8 +742,8 @@ bool TypeChecker::visit(VariableDeclarationStatement const& _statement)
 
 void TypeChecker::endVisit(ExpressionStatement const& _statement)
 {
-	if (type(_statement.expression())->category() == Type::Category::IntegerConstant)
-		if (!dynamic_pointer_cast<IntegerConstantType const>(type(_statement.expression()))->integerType())
+	if (type(_statement.expression())->category() == Type::Category::NumberConstant)
+		if (!dynamic_pointer_cast<ConstantNumberType const>(type(_statement.expression()))->integerType())
 			typeError(_statement.expression().location(), "Invalid integer constant.");
 }
 
@@ -858,6 +858,7 @@ bool TypeChecker::visit(TupleExpression const& _tuple)
 				fatalTypeError(_tuple.location(), "Tuple component cannot be empty.");
 			else if (components[i])
 			{
+				cout << i << endl;
 				components[i]->accept(*this);
 				types.push_back(type(*components[i]));
 				if (_tuple.isInlineArray())
@@ -1049,7 +1050,7 @@ bool TypeChecker::visit(FunctionCall const& _functionCall)
 			auto const& argType = type(*arguments[i]);
 			if (functionType->takesArbitraryParameters())
 			{
-				if (auto t = dynamic_cast<IntegerConstantType const*>(argType.get()))
+				if (auto t = dynamic_cast<ConstantNumberType const*>(argType.get()))
 					if (!t->integerType())
 						typeError(arguments[i]->location(), "Integer constant too large.");
 			}
@@ -1284,9 +1285,13 @@ bool TypeChecker::visit(IndexAccess const& _access)
 		else
 		{
 			expectType(*index, IntegerType(256));
-			if (auto integerType = dynamic_cast<IntegerConstantType const*>(type(*index).get()))
-				if (!actualType.isDynamicallySized() && actualType.length() <= integerType->literalValue(nullptr))
+			if (auto numberType = dynamic_cast<ConstantNumberType const*>(type(*index).get()))
+			{
+				if (numberType->denominator() != 1)
+					typeError(_access.location(), "Invalid type for array access.");
+				if (!actualType.isDynamicallySized() && actualType.length() <= numberType->literalValue(nullptr))
 					typeError(_access.location(), "Out of bounds array access.");
+			}				
 		}
 		resultType = actualType.baseType();
 		isLValue = actualType.location() != DataLocation::CallData;
@@ -1311,7 +1316,7 @@ bool TypeChecker::visit(IndexAccess const& _access)
 		else
 		{
 			index->accept(*this);
-			if (auto length = dynamic_cast<IntegerConstantType const*>(type(*index).get()))
+			if (auto length = dynamic_cast<ConstantNumberType const*>(type(*index).get()))
 				resultType = make_shared<TypeType>(make_shared<ArrayType>(
 					DataLocation::Memory,
 					typeType.actualType(),
@@ -1330,7 +1335,7 @@ bool TypeChecker::visit(IndexAccess const& _access)
 		else
 		{
 			expectType(*index, IntegerType(256));
-			if (auto integerType = dynamic_cast<IntegerConstantType const*>(type(*index).get()))
+			if (auto integerType = dynamic_cast<ConstantNumberType const*>(type(*index).get()))
 				if (bytesType.numBytes() <= integerType->literalValue(nullptr))
 					typeError(_access.location(), "Out of bounds array access.");
 		}
