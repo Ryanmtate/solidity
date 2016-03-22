@@ -858,7 +858,6 @@ bool TypeChecker::visit(TupleExpression const& _tuple)
 				fatalTypeError(_tuple.location(), "Tuple component cannot be empty.");
 			else if (components[i])
 			{
-				cout << i << endl;
 				components[i]->accept(*this);
 				types.push_back(type(*components[i]));
 				if (_tuple.isInlineArray())

@@ -194,10 +194,6 @@ TypePointer Type::forLiteral(Literal const& _literal)
 
 TypePointer Type::commonType(TypePointer const& _a, TypePointer const& _b)
 {
-	cout << _a->toString() << endl;
-	cout << _b->toString() << endl;
-	cout << (_a->isImplicitlyConvertibleTo(*_b)) << endl;
-	cout << (_b->isImplicitlyConvertibleTo(*_a)) << endl;
 	if (_b->isImplicitlyConvertibleTo(*_a))
 		return _a;
 	else if (_a->isImplicitlyConvertibleTo(*_b))
@@ -778,7 +774,6 @@ TypePointer ConstantNumberType::binaryOperatorResult(Token::Value _operator, Typ
 				newDenominator = boost::multiprecision::pow(m_value.denominator(), other.m_value.numerator().convert_to<unsigned int>());
 				value = rational(newNumerator, newDenominator);
 			}
-			cout << "EXPONENT: " << to_string(value) << endl;
 			break;
 		}
 		default:
@@ -858,11 +853,8 @@ shared_ptr<FixedPointType const> ConstantNumberType::fixedPointType() const
 	{
 		// need to fix this because these aren't the proper M and N
 		bigint integerBits = value.numerator() / value.denominator(); 
-		cout << "value: " << toString(false) << endl;
-		cout << "integer bits: " << bytesRequired(integerBits) * 8 << endl;
 		rational remain = value - integerBits;
 		bigint fractionalBits = remain.numerator() * bigint(pow(10, m_scalingFactor)) / remain.denominator();
-		cout << "fractional bits: " << bytesRequired(fractionalBits) * 8 << endl; 
 		return make_shared<FixedPointType>(
 			max(bytesRequired(integerBits), 1u) * 8, max(bytesRequired(fractionalBits), 1u) * 8,
 			negative ? FixedPointType::Modifier::Signed : FixedPointType::Modifier::Unsigned
