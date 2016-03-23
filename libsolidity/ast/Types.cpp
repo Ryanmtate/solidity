@@ -387,7 +387,7 @@ bool FixedPointType::isImplicitlyConvertibleTo(Type const& _convertTo) const
 		else if (isSigned())
 			return convertTo.isSigned();
 		else
-			return !convertTo.isSigned() || (convertTo.m_integerBits > m_integerBits && convertTo.m_fractionalBits > m_fractionalBits);
+			return !convertTo.isSigned() || (convertTo.m_integerBits > m_integerBits);
 	}
 	else if (_convertTo.category() == Category::Integer)
 	{
@@ -463,12 +463,12 @@ TypePointer FixedPointType::binaryOperatorResult(Token::Value _operator, TypePoi
 	return commonType;
 }
 
-bool ConstantNumberType::isValidLiteral(const Literal& _literal)
+bool ConstantNumberType::isValidLiteral(Literal const& _literal)
 {
 	try
 	{
 		rational numerator;
-		rational denominator = bigint(1);
+		rational denominator(1);
 		auto radixPoint = find(_literal.value().begin(), _literal.value().end(), '.');		
 		if (radixPoint != _literal.value().end())
 		{
@@ -492,10 +492,7 @@ bool ConstantNumberType::isValidLiteral(const Literal& _literal)
 			rational x = numerator + denominator;
 		}
 		else
-		{
-			numerator = bigint(_literal.value());
-			rational x = numerator;
-		}	
+			rational x = bigint(_literal.value());
 	}
 	catch (...)
 	{
@@ -533,28 +530,14 @@ ConstantNumberType::ConstantNumberType(Literal const& _literal)
 		//cout << endl;
 	}
 	else
-	{
-		numerator = bigint(_literal.value());
-		m_value.assign(numerator.numerator(), denominator.numerator());
-	}
+		m_value = bigint(_literal.value());
+
 	switch (_literal.subDenomination())
 	{
 	case Literal::SubDenomination::None:
-		break;
 	case Literal::SubDenomination::Wei:
 	case Literal::SubDenomination::Second:
-	{
-		if (m_value.denominator() != 1)
-		{
-			char const* sub = Token::toString(_literal.token());
-			BOOST_THROW_EXCEPTION(
-				Error(Error::Type::TypeError) << errinfo_comment(
-					"Cannot divide sub denomination " + ((sub) ? string(Token::toString(_literal.token())) : "") + " any further."
-				)
-			);
-		}	
 		break;
-	}
 	case Literal::SubDenomination::Szabo:
 		m_value *= bigint("1000000000000");
 		break;
@@ -739,6 +722,7 @@ TypePointer ConstantNumberType::binaryOperatorResult(Token::Value _operator, Typ
 			{
 				value = m_value / other.m_value;
 				scale = m_scalingFactor + other.m_scalingFactor;
+				cout << "Scale after division: " << scale << endl;
 			}
 			break;
 		case Token::Mod:
@@ -795,7 +779,10 @@ string ConstantNumberType::toString(bool) const
 {
 	if (m_value.denominator() == 1)
 		return "int_const " + m_value.numerator().str();
-	return "fixed_const " + boost::lexical_cast<string>(boost::rational_cast<double>(m_value));
+	bigint integerBits;
+	bigint fractionalBits;
+	tie(integerBits, fractionalBits) = bigIntConversion();
+	return "fixed_const " + integerBits.str() + "." + fractionalBits.str();
 }
 
 u256 ConstantNumberType::literalValue(Literal const*) const
@@ -852,9 +839,9 @@ shared_ptr<FixedPointType const> ConstantNumberType::fixedPointType() const
 	else
 	{
 		// need to fix this because these aren't the proper M and N
-		bigint integerBits = value.numerator() / value.denominator(); 
-		rational remain = value - integerBits;
-		bigint fractionalBits = remain.numerator() * bigint(pow(10, m_scalingFactor)) / remain.denominator();
+		bigint integerBits;
+		bigint fractionalBits;
+		tie(integerBits, fractionalBits) = bigIntConversion();
 		return make_shared<FixedPointType>(
 			max(bytesRequired(integerBits), 1u) * 8, max(bytesRequired(fractionalBits), 1u) * 8,
 			negative ? FixedPointType::Modifier::Signed : FixedPointType::Modifier::Unsigned
