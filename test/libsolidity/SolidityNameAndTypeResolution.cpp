@@ -3488,6 +3488,66 @@ BOOST_AUTO_TEST_CASE(fixed_point_casting_exponents)
 	BOOST_CHECK(success(text));
 }
 
+BOOST_AUTO_TEST_CASE(rational_unary_operation)
+{
+	char const* text = R"(
+		contract test {
+			function f() {
+				fixed a = +3.5134;
+				fixed b = -2.5145;
+			}
+		}
+	)";
+	BOOST_CHECK(success(text));
+}
+
+BOOST_AUTO_TEST_CASE(rational_bitnot_unary_operation)
+{
+	char const* text = R"(
+		contract test {
+			function f() {
+				fixed a = ~3.56;
+			}
+		}
+	)";
+	BOOST_CHECK(!success(text));
+}
+
+BOOST_AUTO_TEST_CASE(rational_bitor_binary_operation)
+{
+	char const* text = R"(
+		contract test {
+			function f() {
+				fixed a = 1.56 | 3;
+			}
+		}
+	)";
+	BOOST_CHECK(!success(text));
+}
+
+BOOST_AUTO_TEST_CASE(rational_bitxor_binary_operation)
+{
+	char const* text = R"(
+		contract test {
+			function f() {
+				fixed a = 1.56 ^ 3;
+			}
+		}
+	)";
+	BOOST_CHECK(!success(text));
+}
+
+BOOST_AUTO_TEST_CASE(rational_bitand_binary_operation)
+{
+	char const* text = R"(
+		contract test {
+			function f() {
+				fixed a = 1.56 & 3;
+			}
+		}
+	)";
+	BOOST_CHECK(!success(text));
+}
 
 BOOST_AUTO_TEST_SUITE_END()
 

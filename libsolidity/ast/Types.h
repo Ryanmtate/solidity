@@ -365,8 +365,8 @@ public:
 	static bool isValidLiteral(Literal const& _literal);
 
 	explicit ConstantNumberType(Literal const& _literal);
-	explicit ConstantNumberType(rational _value, short _scalingFactor):
-		m_value(_value), m_scalingFactor(_scalingFactor)
+	explicit ConstantNumberType(rational _value):
+		m_value(_value)
 	{}
 	virtual bool isImplicitlyConvertibleTo(Type const& _convertTo) const override;
 	virtual bool isExplicitlyConvertibleTo(Type const& _convertTo) const override;
@@ -387,26 +387,9 @@ public:
 	/// @returns the smallest fixed type that can hold the value or an empty pointer
 	std::shared_ptr<FixedPointType const> fixedPointType() const;
 	bigint denominator() const { return m_value.denominator(); }
-	/// @returns the respective big ints of the rational in their fixed point form
-	std::tuple<bigint, bigint> bigIntConversion() const 
-	{
-		std::cout << std::endl;
-		std::cout << "Numerator: " << m_value.numerator().str() << std::endl;
-		std::cout << "Denominator: " << m_value.denominator().str() << std::endl;
-		bigint integerBits = m_value.numerator() / m_value.denominator(); 
-		std::cout << "IntegerBits: " << integerBits.str() << std::endl;
-		rational remain = m_value - integerBits;
-		std::cout << "Rational Remainder: " << remain << std::endl;
-		bigint fractionalBits = remain.numerator() * bigint(pow(10, m_scalingFactor)) / remain.denominator();
-		std::cout << "Scaling Factor: " << m_scalingFactor << std::endl;
-		std::cout << "FractionalBits: " << fractionalBits.str() << std::endl;
-		
-		return make_tuple(integerBits, fractionalBits);
-	}
 	
 private:
 	rational m_value;
-	short m_scalingFactor;
 };
 
 /**

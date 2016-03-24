@@ -175,6 +175,7 @@ TypePointer Type::fromElementaryTypeName(string const& _name)
 
 TypePointer Type::forLiteral(Literal const& _literal)
 {
+	cout << "do we hit here? " << endl;
 	switch (_literal.token())
 	{
 	case Token::TrueLiteral:
@@ -467,6 +468,7 @@ bool ConstantNumberType::isValidLiteral(Literal const& _literal)
 {
 	try
 	{
+		cout << "Can we even hit here?" << endl;
 		rational numerator;
 		rational denominator(1);
 		auto radixPoint = find(_literal.value().begin(), _literal.value().end(), '.');		
@@ -474,6 +476,7 @@ bool ConstantNumberType::isValidLiteral(Literal const& _literal)
 		{
 			//problem here. If the first digit is a 0 in the string, it won't
 			//turn it into a integer...Using find if not to count the leading 0s.
+			
 			auto leadingZeroes = find_if_not(
 				radixPoint + 1, 
 				_literal.value().end(), 
@@ -481,9 +484,8 @@ bool ConstantNumberType::isValidLiteral(Literal const& _literal)
 			);
 			auto fractionalBegin = leadingZeroes != _literal.value().end() ?
 				leadingZeroes : radixPoint + 1;
-
-			string fractionals = string(fractionalBegin, _literal.value().end());
-			denominator = bigint(fractionals);
+			cout << "isValidLiteral: " << string(fractionalBegin, _literal.value().end()) << endl;
+			denominator = bigint(string(fractionalBegin, _literal.value().end()));
 			denominator /= boost::multiprecision::pow(
 				bigint(10), 
 				distance(radixPoint + 1, _literal.value().end())
@@ -505,7 +507,6 @@ ConstantNumberType::ConstantNumberType(Literal const& _literal)
 {
 	rational numerator;
 	rational denominator = bigint(1);
-	m_scalingFactor = 0;
 	auto radixPoint = find(_literal.value().begin(), _literal.value().end(), '.');
 	if (radixPoint != _literal.value().end())
 	{
@@ -516,18 +517,18 @@ ConstantNumberType::ConstantNumberType(Literal const& _literal)
 			);
 		auto fractionalBegin = leadingZeroes != _literal.value().end() ?
 			leadingZeroes : radixPoint + 1;
-		//separatly grabbing the numerator, denominator, and the scaling factor for conversions
-		string fractionals = string(fractionalBegin, _literal.value().end());
-		m_scalingFactor = distance(radixPoint + 1, _literal.value().end());
-		denominator = bigint(fractionals);
-		denominator /= boost::multiprecision::pow(bigint(10), m_scalingFactor);
+		//separatly grabbing the numerator, denominator for conversions
+		denominator = bigint(string(fractionalBegin, _literal.value().end()));
+		denominator /= boost::multiprecision::pow(
+			bigint(10), 
+			distance(radixPoint + 1, _literal.value().end())
+		);
 		numerator = bigint(string(_literal.value().begin(), radixPoint));
 
 		m_value = numerator + denominator;		
-		//cout << "Original form: " << _literal.value() << endl;
-		//cout << "Actual form: " << to_string(m_value) << endl;
-		//cout << "Float form: " << to_string(boost::rational_cast<long double>(m_value)) << endl;
-		//cout << endl;
+		cout << "Original form: " << _literal.value() << endl;
+		cout << "Actual form: " << m_value << endl;
+		cout << endl;
 	}
 	else
 		m_value = bigint(_literal.value());
@@ -584,21 +585,10 @@ bool ConstantNumberType::isImplicitlyConvertibleTo(Type const& _convertTo) const
 	}
 	else if (_convertTo.category() == Category::FixedPoint)
 	{
-		auto targetType = dynamic_cast<FixedPointType const*>(&_convertTo);
-		if (m_value == 0)
+		if (fixedPointType() && fixedPointType()->isImplicitlyConvertibleTo(_convertTo))
 			return true;
-		int forSignBit = (targetType->isSigned() ? 1 : 0);
-		if (m_value > 0)
-		{
-			bool properlyScaledBits = m_scalingFactor <= targetType->fractionalBits() ? 
-				true : m_scalingFactor == 1 && targetType->fractionalBits() == 0 ? true : false;
-			if (m_value <= (u256(-1) >> (256 - targetType->numBits() + forSignBit)) && properlyScaledBits)
-				return true;
-			else if (targetType->isSigned() && -m_value <= (u256(1) << (targetType->numBits() - forSignBit)) && properlyScaledBits)
-				return true;
-			return false;
-		}
 
+		return false;
 	}
 	else if (_convertTo.category() == Category::FixedBytes)
 	{
@@ -626,7 +616,7 @@ TypePointer ConstantNumberType::unaryOperatorResult(Token::Value _operator) cons
 	{
 	case Token::BitNot:
 		if(m_value.denominator() != 1)
-			BOOST_THROW_EXCEPTION(InternalCompilerError() << errinfo_comment("Cannot perform bit operations on non integer fixed type."));
+			BOOST_THROW_EXCEPTION(Error(Error::Type::TypeError) << errinfo_comment("Cannot perform bit operations on non integer fixed type."));
 		value = ~m_value.numerator();
 		break;
 	case Token::Add:
@@ -640,7 +630,7 @@ TypePointer ConstantNumberType::unaryOperatorResult(Token::Value _operator) cons
 	default:
 		return TypePointer();
 	}
-	return make_shared<ConstantNumberType>(value, m_scalingFactor);
+	return make_shared<ConstantNumberType>(value);
 }
 
 TypePointer ConstantNumberType::binaryOperatorResult(Token::Value _operator, TypePointer const& _other) const
@@ -685,24 +675,23 @@ TypePointer ConstantNumberType::binaryOperatorResult(Token::Value _operator, Typ
 	else
 	{
 		rational value;
-		short scale = max(m_scalingFactor, other.m_scalingFactor);
 		bool fixedPointType = (m_value.denominator() != 1 || other.m_value.denominator() != 1);
 		switch (_operator)
 		{
 		//bit operations will only be enabled for integers and fixed types that resemble integers
 		case Token::BitOr:
 			if (fixedPointType)
-				BOOST_THROW_EXCEPTION(InternalCompilerError() << errinfo_comment("Cannot perform bit operations on non integer fixed type."));
+				BOOST_THROW_EXCEPTION(Error(Error::Type::TypeError) << errinfo_comment("Cannot perform bit operations on non integer fixed type."));
 			value = m_value.numerator() | other.m_value.numerator();
 			break;
 		case Token::BitXor:
 			if (fixedPointType)
-				BOOST_THROW_EXCEPTION(InternalCompilerError() << errinfo_comment("Cannot perform bit operations on non integer fixed type."));
+				BOOST_THROW_EXCEPTION(Error(Error::Type::TypeError) << errinfo_comment("Cannot perform bit operations on non integer fixed type."));
 			value = m_value.numerator() ^ other.m_value.numerator();
 			break;
 		case Token::BitAnd:
 			if (fixedPointType)
-				BOOST_THROW_EXCEPTION(InternalCompilerError() << errinfo_comment("Cannot perform bit operations on non integer fixed type."));
+				BOOST_THROW_EXCEPTION(Error(Error::Type::TypeError) << errinfo_comment("Cannot perform bit operations on non integer fixed type."));
 			value = m_value.numerator() & other.m_value.numerator();
 			break;
 		case Token::Add:
@@ -712,18 +701,13 @@ TypePointer ConstantNumberType::binaryOperatorResult(Token::Value _operator, Typ
 			value = m_value - other.m_value;
 			break;
 		case Token::Mul:
-			scale = m_scalingFactor - other.m_scalingFactor;
 			value = m_value * other.m_value;
 			break;			
 		case Token::Div:
 			if (other.m_value == 0)
 				return TypePointer();
 			else
-			{
 				value = m_value / other.m_value;
-				scale = m_scalingFactor + other.m_scalingFactor;
-				cout << "Scale after division: " << scale << endl;
-			}
 			break;
 		case Token::Mod:
 			if (other.m_value == 0)
@@ -763,7 +747,7 @@ TypePointer ConstantNumberType::binaryOperatorResult(Token::Value _operator, Typ
 		default:
 			return TypePointer();
 		}
-		return make_shared<ConstantNumberType>(value, scale);
+		return make_shared<ConstantNumberType>(value);
 	}
 }
 
@@ -779,10 +763,8 @@ string ConstantNumberType::toString(bool) const
 {
 	if (m_value.denominator() == 1)
 		return "int_const " + m_value.numerator().str();
-	bigint integerBits;
-	bigint fractionalBits;
-	tie(integerBits, fractionalBits) = bigIntConversion();
-	return "fixed_const " + integerBits.str() + "." + fractionalBits.str();
+
+	return "rational_const " + m_value.numerator().str() + '/' + m_value.denominator().str();
 }
 
 u256 ConstantNumberType::literalValue(Literal const*) const
@@ -841,7 +823,6 @@ shared_ptr<FixedPointType const> ConstantNumberType::fixedPointType() const
 		// need to fix this because these aren't the proper M and N
 		bigint integerBits;
 		bigint fractionalBits;
-		tie(integerBits, fractionalBits) = bigIntConversion();
 		return make_shared<FixedPointType>(
 			max(bytesRequired(integerBits), 1u) * 8, max(bytesRequired(fractionalBits), 1u) * 8,
 			negative ? FixedPointType::Modifier::Signed : FixedPointType::Modifier::Unsigned
