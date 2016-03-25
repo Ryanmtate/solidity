@@ -175,7 +175,6 @@ TypePointer Type::fromElementaryTypeName(string const& _name)
 
 TypePointer Type::forLiteral(Literal const& _literal)
 {
-	cout << "do we hit here? " << endl;
 	switch (_literal.token())
 	{
 	case Token::TrueLiteral:
@@ -468,7 +467,6 @@ bool ConstantNumberType::isValidLiteral(Literal const& _literal)
 {
 	try
 	{
-		cout << "Can we even hit here?" << endl;
 		rational numerator;
 		rational denominator(1);
 		auto radixPoint = find(_literal.value().begin(), _literal.value().end(), '.');		
@@ -484,7 +482,6 @@ bool ConstantNumberType::isValidLiteral(Literal const& _literal)
 			);
 			auto fractionalBegin = leadingZeroes != _literal.value().end() ?
 				leadingZeroes : radixPoint + 1;
-			cout << "isValidLiteral: " << string(fractionalBegin, _literal.value().end()) << endl;
 			denominator = bigint(string(fractionalBegin, _literal.value().end()));
 			denominator /= boost::multiprecision::pow(
 				bigint(10), 
@@ -525,10 +522,7 @@ ConstantNumberType::ConstantNumberType(Literal const& _literal)
 		);
 		numerator = bigint(string(_literal.value().begin(), radixPoint));
 
-		m_value = numerator + denominator;		
-		cout << "Original form: " << _literal.value() << endl;
-		cout << "Actual form: " << m_value << endl;
-		cout << endl;
+		m_value = numerator + denominator;
 	}
 	else
 		m_value = bigint(_literal.value());
@@ -585,6 +579,7 @@ bool ConstantNumberType::isImplicitlyConvertibleTo(Type const& _convertTo) const
 	}
 	else if (_convertTo.category() == Category::FixedPoint)
 	{
+		cout << "IMPLICIT CONVERSION" << endl;
 		if (fixedPointType() && fixedPointType()->isImplicitlyConvertibleTo(_convertTo))
 			return true;
 
@@ -605,6 +600,7 @@ bool ConstantNumberType::isExplicitlyConvertibleTo(Type const& _convertTo) const
 		TypePointer intType = integerType();
 		return intType && intType->isExplicitlyConvertibleTo(_convertTo);
 	}
+	cout << "EXPLICIT CONVERSION" << endl;
 	TypePointer fixType = fixedPointType();
 	return fixType && fixType->isExplicitlyConvertibleTo(_convertTo);
 }
@@ -644,6 +640,7 @@ TypePointer ConstantNumberType::binaryOperatorResult(Token::Value _operator, Typ
 	}
 	else if (_other->category() == Category::FixedPoint)
 	{
+		cout << "BINARY OPERATOR RESULTS" << endl;
 		shared_ptr<FixedPointType const> fixType = fixedPointType();
 		if (!fixType)
 			return TypePointer();
@@ -665,6 +662,7 @@ TypePointer ConstantNumberType::binaryOperatorResult(Token::Value _operator, Typ
 		}
 		else
 		{
+			cout << "BINARY OPERATOR RESULTS PART 2" << endl;
 			shared_ptr<FixedPointType const> thisFixedPointType = fixedPointType();
 			shared_ptr<FixedPointType const> otherFixedPointType = other.fixedPointType();
 			if (!thisFixedPointType || !otherFixedPointType)
@@ -797,7 +795,7 @@ TypePointer ConstantNumberType::mobileType() const
 
 shared_ptr<IntegerType const> ConstantNumberType::integerType() const
 {
-	bigint value = m_value.numerator();
+	bigint value = m_value.numerator() / m_value.denominator();
 	bool negative = (value < 0);
 	if (negative) // convert to positive number of same bit requirements
 		value = ((0 - value) - 1) << 1;
@@ -813,6 +811,7 @@ shared_ptr<IntegerType const> ConstantNumberType::integerType() const
 shared_ptr<FixedPointType const> ConstantNumberType::fixedPointType() const
 {
 	rational value = m_value;
+	cout << "Original value: " << value << endl;
 	bool negative = (value < 0);
 	if (negative) // convert to absolute value
 		value = abs(value);
@@ -821,11 +820,14 @@ shared_ptr<FixedPointType const> ConstantNumberType::fixedPointType() const
 	else
 	{
 		// need to fix this because these aren't the proper M and N
-		bigint integerBits;
+		bigint integerBits = m_value.numerator() / m_value.denominator();
+		bigint remains = m_value.numerator() % m_value.denominator();
+		cout << "Integer: " << integerBits.str() << endl;
+		cout << "Remains: " << remains.str() << endl << endl;
 		bigint fractionalBits;
 		return make_shared<FixedPointType>(
 			max(bytesRequired(integerBits), 1u) * 8, max(bytesRequired(fractionalBits), 1u) * 8,
-			negative ? FixedPointType::Modifier::Signed : FixedPointType::Modifier::Unsigned
+ 			negative ? FixedPointType::Modifier::Signed : FixedPointType::Modifier::Unsigned
 		);
 	}
 }

@@ -3255,18 +3255,6 @@ BOOST_AUTO_TEST_CASE(invalid_fixed_types_7x8_mxn)
 	BOOST_CHECK(!success(text));
 }
 
-BOOST_AUTO_TEST_CASE(invalid_fixed_conversion_leading_zeroes_check)
-{
-	char const* text = R"(
-		contract test {
-			function f() {
-				fixed a = 1.0x2;
-			}
-		}
-	)";
-	BOOST_CHECK(!success(text));
-}
-
 BOOST_AUTO_TEST_CASE(valid_fraction_fixed_type)
 {
 	char const* text = R"(
