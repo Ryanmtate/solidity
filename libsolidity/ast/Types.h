@@ -365,8 +365,8 @@ public:
 	static bool isValidLiteral(Literal const& _literal);
 
 	explicit ConstantNumberType(Literal const& _literal);
-	explicit ConstantNumberType(rational _value, short _scalingFactor):
-		m_value(_value), m_scalingFactor(_scalingFactor)
+	explicit ConstantNumberType(rational _value):
+		m_value(_value)
 	{}
 	virtual bool isImplicitlyConvertibleTo(Type const& _convertTo) const override;
 	virtual bool isExplicitlyConvertibleTo(Type const& _convertTo) const override;
@@ -390,7 +390,6 @@ public:
 	
 private:
 	rational m_value;
-	short m_scalingFactor;
 };
 
 /**

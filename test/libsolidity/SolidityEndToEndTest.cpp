@@ -6486,6 +6486,28 @@ BOOST_AUTO_TEST_CASE(fixed_bytes_length_access)
 	BOOST_CHECK(callContractFunction("f(bytes32)", "789") == encodeArgs(u256(32), u256(16), u256(8)));
 }
 
+BOOST_AUTO_TEST_CASE(fixed_data_type)
+{
+	char const* sourceCode = R"(
+		contract C {
+			fixed public pi = 3.141592;
+		}
+	)";
+	compileAndRun(sourceCode, 0, "C");
+}
+
+BOOST_AUTO_TEST_CASE(fixed_data_type_expression)
+{
+	char const* sourceCode = R"(
+		contract C {
+			function f(fixed a) returns (fixed) {
+				return (a + 3);
+			}
+		}
+	)";
+	compileAndRun(sourceCode, 0, "C");
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 
 }

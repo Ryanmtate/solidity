@@ -1212,6 +1212,18 @@ BOOST_AUTO_TEST_CASE(no_double_radix_in_fixed_literal)
 	BOOST_CHECK(!successParse(text));
 }
 
+BOOST_AUTO_TEST_CASE(invalid_fixed_conversion_leading_zeroes_check)
+{
+	char const* text = R"(
+		contract test {
+			function f() {
+				fixed a = 1.0x2;
+			}
+		}
+	)";
+	BOOST_CHECK(!successParse(text));
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 
 }
